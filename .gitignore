@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Project Runtime Files
+progress.json
+success.log
+failed.log
+
+# Inputs/Outputs
+# links.csv (Ubah jika ingin input file juga di-ignore, default saya biarkan track untuk contoh)
+downloads/
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
