@@ -1,5 +1,6 @@
 import os
 import json
+import csv
 import time
 import requests
 import pandas as pd
@@ -15,8 +16,11 @@ from config import *
 # ========================
 # Constants & Setup
 # ========================
-SUCCESS_LOG = "success.log"
-FAILED_LOG = "failed.log"
+# ========================
+# Constants & Setup
+# ========================
+SUCCESS_LOG = "success_log.csv"
+FAILED_LOG = "failed_log.csv"
 LOG_LOCK = threading.Lock()
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -24,21 +28,33 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 # ========================
 # Logging Functions
 # ========================
-def log_success(url, filename, size, title=None):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    title_str = f" | Title: {title}" if title else ""
-    message = f"[{timestamp}] SUCCESS: {url} -> {filename} ({size} bytes){title_str}"
+def init_logs():
+    """Initialize log files with headers if they don't exist."""
     with LOG_LOCK:
-        with open(SUCCESS_LOG, "a", encoding="utf-8") as f:
-            f.write(message + "\n")
+        if not os.path.exists(SUCCESS_LOG):
+            with open(SUCCESS_LOG, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["TITLE", "URL", "LOG"])
+                
+        if not os.path.exists(FAILED_LOG):
+            with open(FAILED_LOG, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["TITLE", "URL", "LOG"])
+
+def log_success(url, filename, size, title=None):
+    # Log format: TITLE, URL, LOG (filename + size)
+    log_msg = f"Downloaded -> {filename} ({size} bytes)"
+    with LOG_LOCK:
+        with open(SUCCESS_LOG, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow([title or "", url, log_msg])
 
 def log_failure(url, error_msg, title=None):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    title_str = f" | Title: {title}" if title else ""
-    message = f"[{timestamp}] FAILED: {url} | Error: {error_msg}{title_str}"
+    # Log format: TITLE, URL, LOG (error message)
     with LOG_LOCK:
-        with open(FAILED_LOG, "a", encoding="utf-8") as f:
-            f.write(message + "\n")
+        with open(FAILED_LOG, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow([title or "", url, error_msg])
 
 # ========================
 # Network Session Setup
@@ -137,16 +153,56 @@ def process_single_url(session, url, title=None):
 # Main Execution
 # ========================
 def main():
-    # 1. Load CSV
-    if not os.path.exists("links.csv"):
-        print("❌ Error: 'links.csv' not found!")
+    init_logs()
+    
+    # 1. Load Data (Auto-detect format)
+    df = None
+    input_files = [
+        f"{INPUT_FILENAME_BASE}.xlsx",
+        f"{INPUT_FILENAME_BASE}.xls",
+        f"{INPUT_FILENAME_BASE}.csv"
+    ]
+    
+    found_file = None
+    for f_path in input_files:
+        if os.path.exists(f_path):
+            found_file = f_path
+            print(f"📄 Found input file: {found_file}")
+            break
+            
+    if not found_file:
+        print(f"❌ Error: Input file not found! Please create '{INPUT_FILENAME_BASE}.xlsx', .xls, or .csv'")
         return
 
     try:
-        df = pd.read_csv("links.csv")
+        if found_file.endswith((".xlsx", ".xls")):
+            df = pd.read_excel(found_file)
+        else:
+            # CSV with fallback encoding
+            try:
+                # Try UTF-8 with error_bad_lines=False (for pandas < 1.3) or on_bad_lines='skip'
+                # Note: 'on_bad_lines' is for pandas >= 1.3. For older versions use error_bad_lines=False.
+                # using on_bad_lines='warn' or 'skip' is safer for messy CSVs
+                try:
+                    df = pd.read_csv(found_file, encoding="utf-8", on_bad_lines='skip')
+                except TypeError: # Older pandas
+                    df = pd.read_csv(found_file, encoding="utf-8", error_bad_lines=False)
+            except UnicodeDecodeError:
+                print("⚠️ UTF-8 decoding failed. Retrying with ISO-8859-1...")
+                try:
+                    try:
+                        df = pd.read_csv(found_file, encoding="ISO-8859-1", on_bad_lines='skip')
+                    except TypeError:
+                        df = pd.read_csv(found_file, encoding="ISO-8859-1", error_bad_lines=False)
+                except Exception as e:
+                    print(f"❌ Error reading CSV (ISO-8859-1 failed): {e}")
+                    return
     except Exception as e:
-        print(f"❌ Error reading CSV: {e}")
+        print(f"❌ Error reading file: {e}")
         return
+
+    # Clean header names (strip whitespace)
+    df.columns = df.columns.str.strip()
 
     if CSV_URL_COL not in df.columns:
         print(f"❌ Error: CSV must contain '{CSV_URL_COL}' column (Check config.py)")

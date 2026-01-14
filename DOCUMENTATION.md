@@ -19,21 +19,23 @@ All customizable settings are located in `config.py`. This modular approach allo
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `DOWNLOAD_DIR` | `"downloads"` | The output directory. The script will automatically create this folder if it doesn't exist. |
+| `DOWNLOAD_DIR` | `"images"` (may vary) | The output directory name. You can change this to anything (e.g., `fonts`, `data`). The script will auto-create it. |
 | `PROGRESS_FILE` | `"progress.json"` | JSON file used to store the index of the last processed batch. |
-| `CSV_URL_COL` | `"url"` | The exact header name (case-sensitive) in your CSV file that contains the download links. |
-| `CSV_TITLE_COL` | `"Title"` | The exact header name for the file title/description. This is used in logs to help identify files. |
+| `INPUT_FILENAME_BASE` | `"links"` | Base filename to search for (tries .xlsx, then .xls, then .csv). |
+| `CSV_URL_COL` | `"FontImgUrl"` | The exact header name (case-sensitive) in your input file that contains the download links. |
+| `CSV_TITLE_COL` | `"TITLE"` | The exact header name for the file title/description. This is used in logs to help identify files. |
 
 ## 🧠 Logic Flow
 
 ### 1. Initialization
-- The script checks for the existence of the CSV file.
+- The script checks for the existence of input files (`links.xlsx`, `links.xls`, or `links.csv`).
 - It attempts to load `progress.json`.
   - If found, it reads the `last_index` to resume from where it stopped.
   - If not found, it starts from index 0.
+- Initializes `success_log.csv` and `failed_log.csv` with headers if they don't exist.
 
 ### 2. Processing Loop
-- The script iterates through the CSV rows in chunks determined by `BATCH_SIZE`.
+- The script iterates through the data rows in chunks determined by `BATCH_SIZE`.
 - For each batch, it spawns a `ThreadPoolExecutor` with `MAX_WORKERS`.
 - URLs are submitted to the thread pool for concurrent downloading.
 
@@ -48,8 +50,8 @@ All customizable settings are located in `config.py`. This modular approach allo
     - Writes content to a `.tmp` file first to prevent corrupt partial files.
     - Once fully downloaded, renames `.tmp` to the final filename.
 5.  **Logging**:
-    - **Success**: Recorded in `success.log` with timestamp, URL, Filename, Size, and Title.
-    - **Failure**: Recorded in `failed.log` with error details.
+    - **Success**: Recorded in `success_log.csv` (Columns: TITLE, URL, LOG).
+    - **Failure**: Recorded in `failed_log.csv` (Columns: TITLE, URL, LOG).
 
 ### 4. Progress Saving
 - Progress is **only** saved after a full batch completes. This ensures that if you stop the script, you continue safely from the start of the last unfinished batch.

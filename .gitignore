@@ -14,9 +14,15 @@ success.log
 failed.log
 
 # Inputs/Outputs
-# links.csv (Ubah jika ingin input file juga di-ignore, default saya biarkan track untuk contoh)
+# links.csv (Ubah jika ingin input file juga di-ignore)
 downloads/
+images/
 *.tmp
+*.csv
+*.log
+
+# Ignore ALL subdirectories (User request: dynamic download folder handling)
+/*/
 
 # OS
 .DS_Store
